@@ -1,0 +1,5 @@
+Pon en esta carpeta los PDF y PowerPoint (.pptx) del curso.
+El chatbot los usará como fuente principal para responder todas las preguntas.
+Después de agregar o quitar archivos, reinicia (python app.py) o en la web usa
+"Base de conocimiento" -> "Volver a leer la carpeta".
+(Los archivos que empiezan con _ como este se ignoran.)

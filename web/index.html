@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Física IA</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚛️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<style>
+:root{
+  --bg:#f6f7fb; --panel:#ffffff; --side:#0f1b33; --side-2:#18284a; --side-txt:#dbe4ff; --side-mut:#8d9cc4;
+  --txt:#1b2236; --mut:#6b7491; --borde:#e2e6f0; --pri:#2f6bff; --pri-2:#1f55d6; --bot:#ffffff; --user:#2f6bff;
+  --user-txt:#fff; --rojo:#e5484d; --verde:#16a34a; --doc:#eef3ff; --sombra:0 6px 24px rgba(16,30,70,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0d1220; --panel:#141b2e; --side:#090e1a; --side-2:#141d33; --txt:#e6ebf7; --mut:#93a0c0;
+    --borde:#26304a; --bot:#172038; --doc:#1a2544; --sombra:0 6px 24px rgba(0,0,0,.3); }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+select,input,textarea{font:inherit;color:inherit}
+#app{display:flex;height:100vh;height:100dvh}
+
+/* ── Pantalla de cuentas ── */
+#auth{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:16px;
+  background:radial-gradient(circle at 20% 10%,#2f6bff33,transparent 45%),radial-gradient(circle at 85% 90%,#7c3aed33,transparent 45%),var(--bg)}
+.auth-card{background:var(--panel);border:1px solid var(--borde);border-radius:20px;box-shadow:var(--sombra);padding:32px 28px;width:100%;max-width:400px}
+.auth-card .logo{font-size:48px;text-align:center}
+.auth-card h1{text-align:center;margin:6px 0 2px;font-size:26px}
+.auth-card .sub{text-align:center;color:var(--mut);margin:0 0 22px;font-size:14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:12px;padding:4px;margin-bottom:18px}
+.tabs button{padding:9px;border-radius:9px;font-weight:600;color:var(--mut)}
+.tabs button.on{background:var(--panel);color:var(--txt);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+#formAuth{display:flex;flex-direction:column;gap:10px}
+#formAuth label{font-size:13px;font-weight:500;display:flex;flex-direction:column;gap:5px}
+#formAuth input{padding:11px 12px;border:1px solid var(--borde);border-radius:10px;background:var(--bg);outline:none}
+#formAuth input:focus{border-color:var(--pri)}
+#formAuth .btn-pri{margin-top:6px;padding:12px}
+.err{color:var(--rojo);font-size:13px;min-height:18px}
+
+/* ── Barra lateral ── */
+#sidebar{width:290px;flex-shrink:0;background:var(--side);color:var(--side-txt);display:flex;flex-direction:column;padding:16px;gap:12px}
+.brand{font-size:20px;font-weight:700;display:flex;align-items:center;gap:8px}
+.brand small{display:block;font-size:12px;font-weight:400;color:var(--side-mut)}
+.btn-pri{background:var(--pri);color:#fff;border-radius:10px;padding:10px 14px;font-weight:600}
+.btn-pri:hover{background:var(--pri-2)}
+.btn-pri:disabled{opacity:.6;cursor:wait}
+.fila{display:flex;gap:6px;align-items:center}
+.etq{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--side-mut);margin-top:4px}
+#sidebar select{flex:1;min-width:0;background:var(--side-2);border:1px solid #2a3a63;border-radius:8px;padding:8px;color:var(--side-txt)}
+.ico{width:36px;height:36px;border-radius:8px;background:var(--side-2);display:grid;place-items:center;flex-shrink:0}
+.ico:hover{background:#24365f}
+.ico:disabled{opacity:.4;cursor:not-allowed}
+#listaChats{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -6px;padding:0 6px}
+.item{text-align:left;padding:9px 10px;border-radius:8px;color:var(--side-txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item:hover{background:var(--side-2)}
+.item.activo{background:#2a3f72}
+.item span{display:block;font-size:11px;color:var(--side-mut)}
+.vacio{color:var(--side-mut);font-size:13px;padding:6px 4px}
+.ajustes{border-top:1px solid #23325a;padding-top:12px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.switch{display:flex;align-items:center;gap:8px;cursor:pointer}
+.link{font-size:14px}
+.cuenta{display:flex;align-items:center;gap:10px;background:var(--side-2);border-radius:10px;padding:8px 10px}
+.cuenta .avatar{width:32px;height:32px;border-radius:50%;background:var(--pri);display:grid;place-items:center;font-weight:700;color:#fff;flex-shrink:0}
+.cuenta .quien{flex:1;min-width:0;line-height:1.2}
+.cuenta .quien b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.cuenta .quien span{font-size:12px;color:var(--side-mut)}
+.cuenta button{font-size:12px;color:var(--side-mut);padding:6px;border-radius:6px}
+.cuenta button:hover{color:#fff;background:#24365f}
+
+/* ── Zona principal ── */
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+header{display:flex;align-items:center;gap:10px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--borde)}
+#btnMenu{display:none;font-size:22px}
+.titulo{flex:1;min-width:0}
+#tituloChat{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#subChat{font-size:12px;color:var(--mut)}
+.acciones{display:flex;gap:6px;align-items:center}
+.acciones button{width:36px;height:36px;border-radius:8px;border:1px solid var(--borde)}
+.acciones button:hover{background:var(--bg)}
+.acciones select{border:1px solid var(--borde);border-radius:8px;padding:7px;background:var(--panel);max-width:150px}
+#aviso{background:#fff4e5;color:#8a4b00;padding:10px 18px;font-size:14px;border-bottom:1px solid #f5d9a8}
+#docsBar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--borde);font-size:13px}
+#docsBar .t{color:var(--mut);font-weight:600}
+.doc{display:inline-flex;align-items:center;gap:6px;background:var(--doc);border:1px solid var(--borde);border-radius:999px;padding:5px 6px 5px 12px;max-width:100%}
+.doc span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.doc small{color:var(--mut)}
+.doc button{width:22px;height:22px;border-radius:50%;color:var(--mut)}
+.doc button:hover{background:var(--rojo);color:#fff}
+#mensajes{flex:1;overflow-y:auto;padding:24px 18px;display:flex;flex-direction:column;gap:16px}
+.msg{display:flex;gap:10px;max-width:860px;width:100%;margin:0 auto}
+.msg.user{flex-direction:row-reverse}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;flex-shrink:0;background:var(--panel);border:1px solid var(--borde)}
+.burbuja{padding:12px 16px;border-radius:16px;max-width:min(680px,85%);line-height:1.55;overflow-wrap:anywhere;box-shadow:var(--sombra)}
+.bot .burbuja{background:var(--bot);border:1px solid var(--borde);border-top-left-radius:4px}
+.user .burbuja{background:var(--user);color:var(--user-txt);border-top-right-radius:4px}
+.user .texto{white-space:pre-wrap}
+.burbuja p{margin:.4em 0}.burbuja p:first-child{margin-top:0}.burbuja p:last-child{margin-bottom:0}
+.burbuja pre{background:#0b1020;color:#e6ebf7;padding:10px;border-radius:8px;overflow-x:auto}
+.burbuja code{font-family:Consolas,monospace;font-size:.92em}
+.burbuja table{border-collapse:collapse;margin:8px 0}.burbuja td,.burbuja th{border:1px solid var(--borde);padding:4px 8px}
+.katex-display{overflow-x:auto;overflow-y:hidden;padding:4px 0}
+.imgs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.imgs img{max-width:220px;max-height:220px;border-radius:10px;cursor:zoom-in;object-fit:cover}
+audio{width:100%;max-width:300px;height:36px;margin:6px 0 2px;display:block}
+.nota{font-size:12px;opacity:.8;margin-bottom:4px}
+.escribiendo{display:flex;gap:5px;padding:16px}
+.escribiendo i{width:8px;height:8px;border-radius:50%;background:var(--mut);animation:b 1.2s infinite}
+.escribiendo i:nth-child(2){animation-delay:.2s}.escribiendo i:nth-child(3){animation-delay:.4s}
+@keyframes b{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
+
+/* Bienvenida */
+.bienvenida{margin:auto;text-align:center;max-width:680px;padding:20px}
+.bienvenida .logo{font-size:56px}
+.bienvenida h1{margin:8px 0 6px;font-size:28px}
+.bienvenida p{color:var(--mut);margin:0 0 22px}
+.chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.chip{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:12px;text-align:left;font-size:14px;box-shadow:var(--sombra)}
+.chip:hover{border-color:var(--pri)}
+
+/* Compositor */
+footer{padding:10px 18px 16px;background:var(--bg)}
+.caja{max-width:860px;margin:0 auto;background:var(--panel);border:1px solid var(--borde);border-radius:16px;box-shadow:var(--sombra);padding:8px}
+.caja.arrastre{border-color:var(--pri);box-shadow:0 0 0 3px #2f6bff33}
+#previews{display:flex;gap:8px;flex-wrap:wrap}
+#previews:not(:empty){padding:6px 6px 10px}
+.prev{position:relative}
+.prev img{width:64px;height:64px;object-fit:cover;border-radius:8px;display:block}
+.prev button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--rojo);color:#fff;font-size:12px;line-height:20px}
+#estadoGrab{color:var(--rojo);font-size:13px;font-weight:600;padding:4px 8px}
+.composer{display:flex;align-items:flex-end;gap:4px}
+.composer textarea{flex:1;border:none;outline:none;resize:none;background:transparent;padding:9px 6px;max-height:160px;line-height:1.4;min-width:0}
+.cbtn{width:40px;height:40px;border-radius:10px;font-size:19px;display:grid;place-items:center;flex-shrink:0}
+.cbtn:hover{background:var(--bg)}
+#btnMic.grabando{background:var(--rojo);color:#fff;animation:p 1s infinite}
+@keyframes p{50%{box-shadow:0 0 0 6px rgba(229,72,77,.25)}}
+#btnEnviar{background:var(--pri);color:#fff}
+#btnEnviar:disabled,.cbtn:disabled{opacity:.45;cursor:not-allowed}
+.pie{text-align:center;font-size:11px;color:var(--mut);margin-top:6px}
+
+.btn-base{display:flex;align-items:center;gap:8px;background:var(--side-2);border:1px solid #2a3a63;border-radius:10px;padding:9px 10px;text-align:left}
+.btn-base:hover{background:#24365f}
+.btn-base b{flex:1}
+.btn-base span{font-size:12px;color:var(--side-mut)}
+.fuentes{margin-top:10px;padding-top:8px;border-top:1px dashed var(--borde);font-size:12px;color:var(--mut);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fuentes span{background:var(--doc);border-radius:999px;padding:2px 9px}
+.modal{position:fixed;inset:0;background:rgba(5,10,25,.55);display:grid;place-items:center;z-index:50;padding:16px}
+.tarjeta{background:var(--panel);border-radius:16px;padding:22px;width:100%;max-width:560px;max-height:85vh;overflow:auto;box-shadow:var(--sombra)}
+.tarjeta h2{margin:0 0 6px}
+.tarjeta p{color:var(--mut);font-size:14px;margin:0 0 12px}
+.tarjeta code{background:var(--bg);padding:2px 6px;border-radius:6px;font-size:12px;word-break:break-all}
+.arch{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--borde);border-radius:10px;margin-bottom:8px}
+.arch b{display:block;word-break:break-word}
+.arch small{color:var(--mut)}
+.arch .mal{color:var(--rojo)}
+#toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1b2236;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:60;max-width:90vw;box-shadow:var(--sombra)}
+#visor{position:fixed;inset:0;background:rgba(0,0,0,.85);display:grid;place-items:center;z-index:70;cursor:zoom-out}
+#visor img{max-width:94vw;max-height:94vh;border-radius:8px}
+#velo{display:none}
+
+/* Celular */
+@media (max-width:800px){
+  #sidebar{position:fixed;inset:0 auto 0 0;z-index:40;transform:translateX(-100%);transition:transform .2s}
+  #sidebar.abierto{transform:none}
+  #velo.ver{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:30}
+  #btnMenu{display:block}
+  .acciones select{max-width:100px}
+  #mensajes{padding:16px 10px}
+  footer{padding:8px 8px 12px}
+  .burbuja{max-width:88%}
+  .doc span{max-width:150px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ Pantalla de cuentas ══════════ -->
+<section id="auth" hidden>
+  <div class="auth-card">
+    <div class="logo">⚛️</div>
+    <h1>Física IA</h1>
+    <p class="sub">Tu tutor de física con inteligencia artificial</p>
+    <div class="tabs">
+      <button type="button" id="tabLogin" class="on">Iniciar sesión</button>
+      <button type="button" id="tabReg">Crear cuenta</button>
+    </div>
+    <form id="formAuth" autocomplete="on">
+      <label id="lNombre" hidden>Nombre
+        <input id="aNombre" placeholder="Ej. Piero" autocomplete="name" maxlength="60">
+      </label>
+      <label>Usuario
+        <input id="aUsuario" placeholder="Ej. piero.fisica" autocomplete="username" maxlength="30">
+      </label>
+      <label>Contraseña
+        <input id="aClave" type="password" placeholder="Mínimo 6 caracteres" autocomplete="current-password">
+      </label>
+      <label id="lClave2" hidden>Repite la contraseña
+        <input id="aClave2" type="password" autocomplete="new-password">
+      </label>
+      <div class="err" id="aErr"></div>
+      <button class="btn-pri" type="submit" id="aBtn">Entrar</button>
+    </form>
+  </div>
+</section>
+
+<!-- ══════════ Aplicación ══════════ -->
+<div id="app" hidden>
+  <aside id="sidebar">
+    <div class="brand">⚛️ <div>Física IA<small>Tu tutor de física con IA</small></div></div>
+    <button id="btnNuevo" class="btn-pri">＋ Nueva conversación</button>
+
+    <div class="etq">Apartado</div>
+    <div class="fila">
+      <select id="selApartado"></select>
+      <button class="ico" id="btnAddAp" title="Crear apartado">＋</button>
+      <button class="ico" id="btnDelAp" title="Eliminar apartado">🗑</button>
+    </div>
+
+    <button class="btn-base" id="btnBase">📚 <b>Base de conocimiento</b><span id="numBase">…</span></button>
+
+    <div class="etq">Conversaciones</div>
+    <div id="listaChats"></div>
+
+    <div class="ajustes">
+      <label>Modelo de IA
+        <div class="fila" style="margin-top:4px"><select id="selModelo"></select></div>
+      </label>
+      <label class="switch"><input type="checkbox" id="chkVoz" checked> 🔊 Responder con voz</label>
+      <label class="switch"><input type="checkbox" id="chkBase" checked> 📚 Usar base de conocimiento</label>
+    </div>
+    <div class="cuenta">
+      <div class="avatar" id="avatar">?</div>
+      <div class="quien"><b id="nomUsuario"></b><span id="idUsuario"></span></div>
+      <button id="btnSalir" title="Cerrar sesión">Salir ↪</button>
+    </div>
+  </aside>
+  <div id="velo"></div>
+
+  <main>
+    <header>
+      <button id="btnMenu" title="Menú">☰</button>
+      <div class="titulo">
+        <div id="tituloChat">Nueva conversación</div>
+        <div id="subChat"></div>
+      </div>
+      <div class="acciones" id="accionesChat" hidden>
+        <button id="btnRenombrar" title="Renombrar">✏️</button>
+        <select id="selMover" title="Mover a otro apartado"></select>
+        <button id="btnDescargar" title="Descargar conversación">📥</button>
+        <button id="btnBorrar" title="Borrar conversación">🗑</button>
+      </div>
+    </header>
+    <div id="aviso" hidden>🔑 Falta tu API key de Gemini. Ábrela gratis en
+      <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
+      pégala en el archivo <b>.env</b> y reinicia con <code>python app.py</code>.</div>
+    <div id="docsBar" hidden></div>
+
+    <section id="mensajes"></section>
+
+    <footer>
+      <div class="caja" id="caja">
+        <div id="previews"></div>
+        <div id="estadoGrab" hidden>🔴 Grabando… <span id="tiempo">0:00</span> — toca 🎤 otra vez para enviar</div>
+        <div class="composer">
+          <input type="file" id="fileImg" accept="image/*" multiple hidden>
+          <input type="file" id="fileDoc" accept=".pdf,.pptx,.ppt,.txt,.md" multiple hidden>
+          <button class="cbtn" id="btnImg" title="Subir imagen de tu galería">📷</button>
+          <button class="cbtn" id="btnDoc" title="Subir PDF o PowerPoint para que la IA se base en él">📎</button>
+          <textarea id="txt" rows="1" placeholder="Escribe tu pregunta de física…"></textarea>
+          <button class="cbtn" id="btnMic" title="Preguntar por voz">🎤</button>
+          <button class="cbtn" id="btnEnviar" title="Enviar">➤</button>
+        </div>
+      </div>
+      <div class="pie">Enter para enviar · 📷 fotos · 📎 PDF o PowerPoint · 🎤 voz</div>
+    </footer>
+  </main>
+</div>
+
+<div class="modal" id="modalBase" hidden>
+  <div class="tarjeta">
+    <h2>📚 Base de conocimiento</h2>
+    <p>Estos son los materiales que el chatbot usa como fuente principal para responder a <b>todas</b> las preguntas.
+      Para agregar o quitar archivos, ponlos en la carpeta <code id="rutaBase"></code> (PDF o PowerPoint .pptx)
+      y presiona «Volver a leer».</p>
+    <div id="listaBase"></div>
+    <div class="fila" style="justify-content:flex-end;margin-top:12px">
+      <button class="link" id="btnCerrarBase" style="color:var(--mut);padding:10px">Cerrar</button>
+      <button class="btn-pri" id="btnRecargarBase">🔄 Volver a leer la carpeta</button>
+    </div>
+  </div>
+</div>
+<div id="toast" hidden></div>
+<div id="visor" hidden><img alt=""></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const S = { base: 0, usuario: null, apartados: [], apartado: null, chat: null, chats: [], imgs: [], enviando: false, modoReg: false };
+const store = {
+  k(k) { return (S.usuario ? S.usuario.usuario + ':' : '') + k; },
+  get(k, d) { try { const v = localStorage.getItem(this.k(k)); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(this.k(k), JSON.stringify(v)); } catch {} }
+};
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ── Utilidades ──
+async function api(url, opts = {}) {
+  const r = await fetch(url, opts);
+  let data = {};
+  try { data = await r.json(); } catch {}
+  if (r.status === 401 && data.login) { mostrarAuth(); }
+  if (!r.ok) throw Object.assign(new Error(data.error || `Error ${r.status}`), { data });
+  return data;
+}
+const jsonReq = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+let toastT;
+function toast(msg, ms = 4500) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+function fecha(iso) { try { return new Date(iso).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; } }
+function abajo() { const m = $('#mensajes'); m.scrollTop = m.scrollHeight; }
+
+// Markdown + fórmulas LaTeX
+function renderMD(texto, el) {
+  const mates = [];
+  const t = texto.replace(/\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$[^$\n]+?\$/g, m => { mates.push(m); return `@@M${mates.length - 1}@@`; });
+  let html = window.marked ? marked.parse(t) : esc(t).replace(/\n/g, '<br>');
+  html = html.replace(/@@M(\d+)@@/g, (_, i) => esc(mates[i]));
+  el.innerHTML = html;
+  if (window.renderMathInElement) {
+    renderMathInElement(el, { throwOnError: false, delimiters: [
+      { left: '$$', right: '$$', display: true }, { left: '\\[', right: '\\]', display: true },
+      { left: '\\(', right: '\\)', display: false }, { left: '$', right: '$', display: false }] });
+  }
+}
+
+// ══════════ Cuentas ══════════
+function modoAuth(reg) {
+  S.modoReg = reg;
+  $('#tabLogin').classList.toggle('on', !reg); $('#tabReg').classList.toggle('on', reg);
+  $('#lNombre').hidden = !reg; $('#lClave2').hidden = !reg;
+  $('#aBtn').textContent = reg ? 'Crear cuenta' : 'Entrar';
+  $('#aClave').autocomplete = reg ? 'new-password' : 'current-password';
+  $('#aErr').textContent = '';
+}
+function mostrarAuth() {
+  S.usuario = null; $('#app').hidden = true; $('#auth').hidden = false; $('#aClave').value = ''; $('#aClave2').value = '';
+  setTimeout(() => $('#aUsuario').focus(), 50);
+}
+async function enviarAuth(e) {
+  e.preventDefault();
+  const usuario = $('#aUsuario').value.trim(), clave = $('#aClave').value;
+  if (!usuario || !clave) { $('#aErr').textContent = 'Completa usuario y contraseña.'; return; }
+  if (S.modoReg && clave !== $('#aClave2').value) { $('#aErr').textContent = 'Las contraseñas no coinciden.'; return; }
+  $('#aBtn').disabled = true; $('#aErr').textContent = '';
+  try {
+    const d = S.modoReg
+      ? await api('/api/registro', jsonReq('POST', { nombre: $('#aNombre').value.trim(), usuario, clave }))
+      : await api('/api/login', jsonReq('POST', { usuario, clave }));
+    await entrar(d.usuario);
+    if (S.modoReg) toast(`🎉 ¡Bienvenido, ${d.usuario.nombre}! Tu cuenta fue creada.`);
+  } catch (err) { $('#aErr').textContent = err.message; }
+  $('#aBtn').disabled = false;
+}
+async function entrar(usuario) {
+  S.usuario = usuario;
+  $('#auth').hidden = true; $('#app').hidden = false;
+  $('#nomUsuario').textContent = usuario.nombre;
+  $('#idUsuario').textContent = '@' + usuario.usuario;
+  $('#avatar').textContent = (usuario.nombre || '?').trim().charAt(0).toUpperCase();
+  $('#chkVoz').checked = store.get('voz', true);
+  $('#chkBase').checked = store.get('base', true);
+  S.apartados = (await api('/api/apartados')).apartados;
+  S.apartado = store.get('apartado', S.apartados[0]);
+  if (!S.apartados.includes(S.apartado)) S.apartado = S.apartados[0];
+  S.chat = null;
+  renderApartados(); await Promise.all([cargarLista(), cargarBase()]);
+  const ult = store.get('chat', null);
+  if (ult) await abrirChat(ult); else renderChat();
+}
+async function salir() {
+  try { await api('/api/logout', { method: 'POST' }); } catch {}
+  S.chat = null; S.chats = []; S.imgs = []; renderPreviews(); modoAuth(false); mostrarAuth();
+}
+
+// ══════════ Render ══════════
+function burbuja(m) {
+  const user = m.rol === 'user';
+  const fila = document.createElement('div');
+  fila.className = 'msg ' + (user ? 'user' : 'bot');
+  fila.innerHTML = `<div class="av">${user ? '🧑‍🎓' : '⚛️'}</div><div class="burbuja"></div>`;
+  const b = fila.querySelector('.burbuja');
+
+  const fuentes = [...(m.imagenes || []).map(r => '/' + r), ...(m._locales || [])];
+  if (fuentes.length) {
+    const cont = document.createElement('div'); cont.className = 'imgs';
+    fuentes.forEach(src => { const im = new Image(); im.src = src; im.alt = 'imagen'; im.onclick = () => verImagen(src); cont.append(im); });
+    b.append(cont);
+  }
+  if (user && m.via_voz) {
+    if (m.audio) { const a = document.createElement('audio'); a.controls = true; a.src = '/' + m.audio; b.append(a); }
+    const n = document.createElement('div'); n.className = 'nota'; n.textContent = '🎤 Mensaje de voz · transcripción:'; b.append(n);
+  }
+  if (m.texto) {
+    const t = document.createElement('div'); t.className = 'texto';
+    if (user) t.textContent = m.texto; else renderMD(m.texto, t);
+    b.append(t);
+  }
+  if (!user && m.fuentes && m.fuentes.length) {
+    const f = document.createElement('div'); f.className = 'fuentes';
+    f.innerHTML = '📚 Consultado en la base:' + m.fuentes.map(x => `<span>${esc(x)}</span>`).join('');
+    b.append(f);
+  }
+  if (!user && m.audio) { const a = document.createElement('audio'); a.controls = true; a.src = '/' + m.audio; a.className = 'voz-bot'; b.append(a); }
+  return fila;
+}
+
+function bienvenida() {
+  const tieneDocs = S.chat && S.chat.documentos && S.chat.documentos.length;
+  const sug = tieneDocs
+    ? ['Resume los documentos que subí y explícame los conceptos clave',
+       'Hazme 5 preguntas de práctica basadas en el documento',
+       'Redacta el fundamento teórico de mi informe según el documento',
+       '¿Qué fórmulas importantes aparecen y cómo se usan?']
+    : ['Explícame la segunda ley de Newton con un ejemplo',
+       'Ayúdame a diseñar un experimento para medir la gravedad con un péndulo',
+       'Un auto acelera de 0 a 20 m/s en 5 s. ¿Cuál es su aceleración y cuánto recorre?',
+       '¿Cómo hago el ajuste lineal de mis datos y qué significa la pendiente?'];
+  const d = document.createElement('div'); d.className = 'bienvenida';
+  d.innerHTML = `<div class="logo">⚛️</div><h1>${tieneDocs ? '¿Qué quieres saber de tus documentos?' : `Hola, ${esc(S.usuario.nombre)} 👋`}</h1>
+    <p>${tieneDocs ? 'Responderé basándome en los documentos que subiste y citaré la página o diapositiva.'
+      : (S.base ? `Respondo basándome en los ${S.base} materiales del curso de mi base de conocimiento 📚. ` : '')
+        + '¿Qué quieres aprender de física hoy? Escribe, sube una foto 📷, un PDF o PowerPoint 📎 o pregúntame con tu voz 🎤.'}</p>
+    <div class="chips"></div>`;
+  sug.forEach(s => { const c = document.createElement('button'); c.className = 'chip'; c.textContent = s; c.onclick = () => enviar(null, s); d.querySelector('.chips').append(c); });
+  return d;
+}
+
+function renderDocs() {
+  const bar = $('#docsBar'), docs = (S.chat && S.chat.documentos) || [];
+  bar.hidden = !docs.length; bar.innerHTML = '';
+  if (!docs.length) return;
+  bar.innerHTML = '<span class="t">📚 La IA se basa en:</span>';
+  docs.forEach(d => {
+    const unidad = d.tipo === '.pptx' ? 'diap.' : d.tipo === '.pdf' ? 'pág.' : '';
+    const chip = document.createElement('span'); chip.className = 'doc';
+    chip.innerHTML = `${d.tipo === '.pptx' ? '📊' : '📄'} <span title="${esc(d.nombre)}">${esc(d.nombre)}</span>
+      <small>${unidad ? d.unidades + ' ' + unidad : ''}</small><button title="Quitar documento">×</button>`;
+    chip.querySelector('button').onclick = async () => {
+      if (!confirm(`¿Quitar «${d.nombre}» de esta conversación?`)) return;
+      try { S.chat = (await api('/api/documentos/' + d.id, { method: 'DELETE' })).chat; renderChat(); } catch (e) { toast(e.message); }
+    };
+    bar.append(chip);
+  });
+}
+
+function renderChat() {
+  const c = S.chat;
+  $('#tituloChat').textContent = c ? c.titulo : 'Nueva conversación';
+  $('#subChat').textContent = '📁 ' + (c ? c.apartado : S.apartado);
+  $('#accionesChat').hidden = !c;
+  if (c) {
+    $('#selMover').innerHTML = '<option value="">Mover a…</option>' +
+      S.apartados.filter(a => a !== c.apartado).map(a => `<option>${esc(a)}</option>`).join('');
+  }
+  renderDocs();
+  const cont = $('#mensajes'); cont.innerHTML = '';
+  if (!c || !c.mensajes.length) cont.append(bienvenida());
+  else c.mensajes.forEach(m => cont.append(burbuja(m)));
+  abajo();
+}
+
+function renderApartados() {
+  $('#selApartado').innerHTML = S.apartados.map(a => `<option ${a === S.apartado ? 'selected' : ''}>${esc(a)}</option>`).join('');
+  $('#btnDelAp').disabled = S.apartados.length <= 1;
+}
+
+function renderLista() {
+  const l = $('#listaChats'); l.innerHTML = '';
+  if (!S.chats.length) { l.innerHTML = '<div class="vacio">Aún no hay conversaciones en este apartado.</div>'; return; }
+  S.chats.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'item' + (S.chat && S.chat.id === c.id ? ' activo' : '');
+    b.innerHTML = `${esc(c.titulo)}<span>${fecha(c.actualizado)}</span>`;
+    b.onclick = () => { abrirChat(c.id); cerrarMenu(); };
+    l.append(b);
+  });
+}
+
+// ══════════ Datos ══════════
+async function cargarLista() {
+  try { S.chats = (await api('/api/chats?apartado=' + encodeURIComponent(S.apartado))).chats; } catch { S.chats = []; }
+  renderLista();
+}
+async function ponerChat(chat) {
+  S.chat = chat; store.set('chat', chat ? chat.id : null);
+  if (chat && chat.apartado !== S.apartado) { S.apartado = chat.apartado; store.set('apartado', S.apartado); renderApartados(); }
+  renderChat(); await cargarLista();
+}
+async function abrirChat(id) {
+  let chat = null;
+  try { chat = (await api('/api/chats/' + id)).chat; } catch {}
+  await ponerChat(chat);
+}
+function nuevoChat() { S.chat = null; store.set('chat', null); renderChat(); renderLista(); cerrarMenu(); $('#txt').focus(); }
+
+// ══════════ Enviar mensaje ══════════
+async function enviar(audioBlob = null, textoFijo = null) {
+  if (S.enviando) return;
+  const texto = textoFijo ?? $('#txt').value.trim();
+  if (!texto && !audioBlob && !S.imgs.length) return;
+  S.enviando = true; bloquear(true);
+
+  const fd = new FormData();
+  fd.append('chat_id', S.chat ? S.chat.id : '');
+  fd.append('apartado', S.apartado);
+  fd.append('texto', texto);
+  fd.append('modelo', $('#selModelo').value);
+  fd.append('voz', $('#chkVoz').checked ? '1' : '0');
+  fd.append('base', $('#chkBase').checked ? '1' : '0');
+  S.imgs.forEach((im, i) => fd.append('imagenes', im.blob, `imagen${i}.jpg`));
+  if (audioBlob) fd.append('audio', audioBlob, 'voz.wav');
+
+  const cont = $('#mensajes');
+  cont.querySelector('.bienvenida')?.remove();
+  cont.append(burbuja({ rol: 'user', texto: texto || (audioBlob ? '🎤 Procesando tu audio…' : ''), _locales: S.imgs.map(x => x.url) }));
+  const pensando = document.createElement('div'); pensando.className = 'msg bot';
+  pensando.innerHTML = '<div class="av">⚛️</div><div class="burbuja escribiendo"><i></i><i></i><i></i></div>';
+  cont.append(pensando); abajo();
+  $('#txt').value = ''; autoAlto(); S.imgs = []; renderPreviews();
+
+  try {
+    const d = await api('/api/mensaje', { method: 'POST', body: fd });
+    if (d.modelo && d.modelo !== $('#selModelo').value) {
+      if (![...$('#selModelo').options].some(o => o.value === d.modelo)) $('#selModelo').add(new Option(d.modelo, d.modelo));
+      $('#selModelo').value = d.modelo; store.set('modelo', d.modelo);
+    }
+    await ponerChat(d.chat);
+    const voces = document.querySelectorAll('.voz-bot');
+    if ($('#chkVoz').checked && voces.length) voces[voces.length - 1].play().catch(() => {});
+  } catch (e) {
+    pensando.remove();
+    toast(e.message, 7000);
+    if (e.data && e.data.chat) await ponerChat(e.data.chat);
+  } finally {
+    S.enviando = false; bloquear(false);
+  }
+}
+function bloquear(on) { ['#btnEnviar', '#btnMic', '#btnImg', '#btnDoc'].forEach(s => $(s).disabled = on); }
+
+// ══════════ Documentos PDF / PowerPoint ══════════
+async function subirDocs(files) {
+  files = [...files]; if (!files.length || S.enviando) return;
+  const fd = new FormData();
+  fd.append('chat_id', S.chat ? S.chat.id : '');
+  fd.append('apartado', S.apartado);
+  files.forEach(f => fd.append('archivos', f, f.name));
+  S.enviando = true; bloquear(true);
+  toast(`📎 Leyendo ${files.length > 1 ? files.length + ' documentos' : '«' + files[0].name + '»'}…`, 60000);
+  try {
+    const d = await api('/api/documentos', { method: 'POST', body: fd });
+    await ponerChat(d.chat);
+    toast(d.avisos && d.avisos.length ? '⚠ ' + d.avisos.join(' ') : '✅ Documento listo. Ahora pregúntame sobre él.', 6000);
+  } catch (e) { toast(e.message, 8000); }
+  S.enviando = false; bloquear(false);
+}
+
+// ══════════ Imágenes (se reducen a 1600 px antes de subir) ══════════
+function reducir(file) {
+  return new Promise((ok, mal) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(im.width, im.height));
+      const cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+      cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => b ? ok({ blob: b, url: URL.createObjectURL(b) }) : mal(), 'image/jpeg', 0.85);
+      URL.revokeObjectURL(url);
+    };
+    im.onerror = mal; im.src = url;
+  });
+}
+async function agregarImagenes(files) {
+  for (const f of files) { try { S.imgs.push(await reducir(f)); } catch { toast('No se pudo leer una de las imágenes.'); } }
+  renderPreviews();
+}
+function renderPreviews() {
+  const p = $('#previews'); p.innerHTML = '';
+  S.imgs.forEach((im, i) => {
+    const d = document.createElement('div'); d.className = 'prev';
+    d.innerHTML = `<img src="${im.url}" alt=""><button title="Quitar">×</button>`;
+    d.querySelector('button').onclick = () => { S.imgs.splice(i, 1); renderPreviews(); };
+    p.append(d);
+  });
+}
+function verImagen(src) { const v = $('#visor'); v.querySelector('img').src = src; v.hidden = false; }
+
+// ══════════ Grabación de voz (WAV 16 kHz) ══════════
+const G = { on: false };
+async function iniciarGrabacion() {
+  try { G.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { toast('🎤 Permite el uso del micrófono en tu navegador para preguntar por voz.'); return; }
+  G.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  G.src = G.ctx.createMediaStreamSource(G.stream);
+  G.proc = G.ctx.createScriptProcessor(4096, 1, 1);
+  G.buf = [];
+  G.proc.onaudioprocess = e => G.buf.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  G.src.connect(G.proc); G.proc.connect(G.ctx.destination);
+  G.on = true; G.t0 = Date.now();
+  $('#btnMic').classList.add('grabando'); $('#estadoGrab').hidden = false;
+  G.timer = setInterval(() => { const s = Math.floor((Date.now() - G.t0) / 1000); $('#tiempo').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
+}
+function detenerGrabacion() {
+  G.on = false; clearInterval(G.timer);
+  $('#btnMic').classList.remove('grabando'); $('#estadoGrab').hidden = true; $('#tiempo').textContent = '0:00';
+  G.proc.disconnect(); G.src.disconnect(); G.stream.getTracks().forEach(t => t.stop());
+  const rate = G.ctx.sampleRate; G.ctx.close();
+  const total = G.buf.reduce((n, b) => n + b.length, 0);
+  if (total < rate * 0.4) { toast('La grabación fue muy corta. Habla con 🎤 activado y tócalo otra vez al terminar.'); return null; }
+  const datos = new Float32Array(total); let o = 0; G.buf.forEach(b => { datos.set(b, o); o += b.length; });
+  return aWav(bajarMuestreo(datos, rate, 16000), 16000);
+}
+function bajarMuestreo(d, de, a) {
+  if (a >= de) return d;
+  const r = de / a, n = Math.floor(d.length / r), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const ini = Math.floor(i * r), fin = Math.min(Math.floor((i + 1) * r), d.length); let s = 0; for (let j = ini; j < fin; j++) s += d[j]; out[i] = s / (fin - ini || 1); }
+  return out;
+}
+function aWav(m, rate) {
+  const buf = new ArrayBuffer(44 + m.length * 2), v = new DataView(buf);
+  const str = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); v.setUint32(4, 36 + m.length * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, m.length * 2, true);
+  for (let i = 0; i < m.length; i++) { const s = Math.max(-1, Math.min(1, m[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+// ══════════ Base de conocimiento ══════════
+function renderBase(d) {
+  const ok = d.archivos.filter(a => a.fragmentos).length;
+  S.base = ok; $('#numBase').textContent = ok + (ok === 1 ? ' doc.' : ' docs.');
+  $('#rutaBase').textContent = d.carpeta;
+  const l = $('#listaBase'); l.innerHTML = '';
+  if (!d.archivos.length) { l.innerHTML = '<p>La carpeta está vacía. Copia ahí los PDF o PowerPoint del curso.</p>'; return; }
+  d.archivos.forEach(a => {
+    const div = document.createElement('div'); div.className = 'arch';
+    const ext = a.nombre.toLowerCase().endsWith('.pptx') || a.nombre.toLowerCase().endsWith('.ppt');
+    div.innerHTML = `<div>${a.fragmentos ? (ext ? '📊' : '📄') : '⚠️'}</div><div><b>${esc(a.nombre)}</b>
+      <small class="${a.fragmentos ? '' : 'mal'}">${a.aviso ? esc(a.aviso) : `${a.paginas} ${ext ? 'diapositivas' : 'páginas'} · ${a.fragmentos} fragmentos indexados`}</small></div>`;
+    l.append(div);
+  });
+}
+async function cargarBase() { try { renderBase(await api('/api/conocimiento')); } catch {} }
+async function abrirBase() { $('#modalBase').hidden = false; $('#listaBase').innerHTML = '<p>Cargando…</p>'; await cargarBase(); }
+async function recargarBase() {
+  const b = $('#btnRecargarBase'); b.disabled = true; b.textContent = '⏳ Leyendo archivos…';
+  try { renderBase(await api('/api/conocimiento/actualizar', { method: 'POST' })); toast('✅ Base de conocimiento actualizada.'); }
+  catch (e) { toast(e.message); }
+  b.disabled = false; b.textContent = '🔄 Volver a leer la carpeta';
+  if (!S.chat || !S.chat.mensajes.length) renderChat();
+}
+
+function llenarModelos(ms) {
+  let guardado = null; try { guardado = JSON.parse(localStorage.getItem('modelo')); } catch {}
+  $('#selModelo').innerHTML = ms.map(m => `<option ${m === guardado ? 'selected' : ''}>${esc(m)}</option>`).join('');
+}
+function cerrarMenu() { $('#sidebar').classList.remove('abierto'); $('#velo').classList.remove('ver'); }
+function autoAlto() { const t = $('#txt'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 160) + 'px'; }
+
+// ══════════ Eventos ══════════
+function eventos() {
+  $('#tabLogin').onclick = () => modoAuth(false);
+  $('#tabReg').onclick = () => modoAuth(true);
+  $('#formAuth').onsubmit = enviarAuth;
+  $('#btnSalir').onclick = salir;
+
+  $('#btnEnviar').onclick = () => enviar();
+  $('#txt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } });
+  $('#txt').addEventListener('input', autoAlto);
+  $('#btnImg').onclick = () => $('#fileImg').click();
+  $('#fileImg').onchange = async e => { await agregarImagenes(e.target.files); e.target.value = ''; };
+  $('#btnDoc').onclick = () => $('#fileDoc').click();
+  $('#fileDoc').onchange = e => { const f = [...e.target.files]; e.target.value = ''; subirDocs(f); };
+
+  // Arrastrar y soltar imágenes o documentos sobre la caja de texto
+  const caja = $('#caja');
+  caja.addEventListener('dragover', e => { e.preventDefault(); caja.classList.add('arrastre'); });
+  caja.addEventListener('dragleave', () => caja.classList.remove('arrastre'));
+  caja.addEventListener('drop', e => {
+    e.preventDefault(); caja.classList.remove('arrastre');
+    const files = [...e.dataTransfer.files];
+    agregarImagenes(files.filter(f => f.type.startsWith('image/')));
+    subirDocs(files.filter(f => /\.(pdf|pptx?|txt|md)$/i.test(f.name)));
+  });
+
+  $('#btnMic').onclick = async () => {
+    if (!G.on) return iniciarGrabacion();
+    const wav = detenerGrabacion(); if (wav) enviar(wav);
+  };
+  $('#btnNuevo').onclick = nuevoChat;
+  $('#selApartado').onchange = async e => {
+    S.apartado = e.target.value; store.set('apartado', S.apartado);
+    S.chat = null; await cargarLista();
+    if (S.chats.length) abrirChat(S.chats[0].id); else { store.set('chat', null); renderChat(); }
+  };
+  $('#btnAddAp').onclick = async () => {
+    const n = prompt('Nombre del nuevo apartado (ej. Cinemática, Proyecto robot):'); if (!n || !n.trim()) return;
+    try {
+      S.apartados = (await api('/api/apartados', jsonReq('POST', { nombre: n.trim() }))).apartados;
+      S.apartado = n.trim().slice(0, 40); store.set('apartado', S.apartado); S.chat = null;
+      renderApartados(); await cargarLista(); renderChat();
+    } catch (e) { toast(e.message); }
+  };
+  $('#btnDelAp').onclick = async () => {
+    if (!confirm(`¿Eliminar el apartado «${S.apartado}»? Sus conversaciones se moverán a otro apartado.`)) return;
+    try {
+      S.apartados = (await api('/api/apartados/' + encodeURIComponent(S.apartado), { method: 'DELETE' })).apartados;
+      S.apartado = S.apartados[0]; store.set('apartado', S.apartado); S.chat = null;
+      renderApartados(); await cargarLista(); renderChat();
+    } catch (e) { toast(e.message); }
+  };
+  $('#btnRenombrar').onclick = async () => {
+    const n = prompt('Nuevo nombre de la conversación:', S.chat.titulo); if (!n || !n.trim()) return;
+    try { await ponerChat((await api('/api/chats/' + S.chat.id, jsonReq('PATCH', { titulo: n }))).chat); } catch (e) { toast(e.message); }
+  };
+  $('#selMover').onchange = async e => {
+    if (!e.target.value) return;
+    try {
+      await ponerChat((await api('/api/chats/' + S.chat.id, jsonReq('PATCH', { apartado: e.target.value }))).chat);
+      toast('📁 Conversación movida a «' + S.apartado + '»');
+    } catch (err) { toast(err.message); }
+  };
+  $('#btnBorrar').onclick = async () => {
+    if (!confirm('¿Borrar esta conversación? No se puede deshacer.')) return;
+    try { await api('/api/chats/' + S.chat.id, { method: 'DELETE' }); } catch {}
+    nuevoChat(); cargarLista();
+  };
+  $('#btnDescargar').onclick = () => {
+    const c = S.chat; let md = `# ${c.titulo}\nApartado: ${c.apartado} · Creado: ${c.creado}\n\n`;
+    if (c.documentos.length) md += `Documentos de referencia: ${c.documentos.map(d => d.nombre).join(', ')}\n\n`;
+    c.mensajes.forEach(m => {
+      md += `### ${m.rol === 'user' ? '🧑‍🎓 Estudiante' : '⚛️ Física IA'}${m.via_voz ? ' (por voz)' : ''}${m.imagenes?.length ? ` [${m.imagenes.length} imagen(es)]` : ''}\n${m.texto}\n\n`;
+    });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+    a.download = c.titulo.replace(/[\\/:*?"<>|]/g, '').slice(0, 40) + '.md'; a.click();
+  };
+  $('#selModelo').onchange = e => { try { localStorage.setItem('modelo', JSON.stringify(e.target.value)); } catch {} };
+  $('#chkVoz').onchange = e => store.set('voz', e.target.checked);
+  $('#chkBase').onchange = e => store.set('base', e.target.checked);
+  $('#btnBase').onclick = () => { abrirBase(); cerrarMenu(); };
+  $('#btnCerrarBase').onclick = () => $('#modalBase').hidden = true;
+  $('#btnRecargarBase').onclick = recargarBase;
+  $('#btnMenu').onclick = () => { $('#sidebar').classList.add('abierto'); $('#velo').classList.add('ver'); };
+  $('#velo').onclick = cerrarMenu;
+  $('#visor').onclick = () => $('#visor').hidden = true;
+}
+
+// ══════════ Inicio ══════════
+async function init() {
+  eventos();
+  let e;
+  try { e = await api('/api/estado'); }
+  catch { document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">No se pudo conectar con el servidor. ¿Está corriendo <b>python app.py</b>?</p>'; return; }
+  llenarModelos(e.modelos);
+  $('#aviso').hidden = e.clave;
+  if (e.usuario) await entrar(e.usuario); else mostrarAuth();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
