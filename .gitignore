@@ -1,3 +1,5 @@
 .env
-/datos/secret.key
-/datos/fisica_ia.db
+datos/
+__pycache__/
+*.pyc
+.vercel

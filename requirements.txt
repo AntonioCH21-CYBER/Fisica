@@ -4,3 +4,4 @@ gTTS
 python-dotenv
 pypdf
 python-pptx
+psycopg[binary]

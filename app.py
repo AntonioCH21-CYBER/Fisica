@@ -10,11 +10,12 @@ Interfaz: HTML / CSS / JavaScript  (carpeta web/)
   principal del chatbot para responder (búsqueda de fragmentos relevantes en cada pregunta)
 - Además, cada conversación puede tener sus propios documentos
 
-Tu API key va en el archivo .env  (GEMINI_API_KEY=tu_clave)
-Ejecutar:  python app.py
+En tu PC:   la API key va en .env  ->  python app.py   (datos en SQLite, carpeta datos/)
+En Vercel:  variables de entorno GEMINI_API_KEY y DATABASE_URL (Neon Postgres)
 """
 import importlib
 import importlib.util
+import os
 import site
 import subprocess
 import sys
@@ -27,8 +28,12 @@ except Exception:
 
 # ───────────── Instala automáticamente lo que falte ─────────────
 def instalar_dependencias():
+    if os.getenv("VERCEL"):  # en Vercel las librerías se instalan desde requirements.txt
+        return
     paquetes = {"flask": "flask", "google.genai": "google-genai", "gtts": "gTTS",
                 "dotenv": "python-dotenv", "pypdf": "pypdf", "pptx": "python-pptx"}
+    if os.getenv("DATABASE_URL"):
+        paquetes["psycopg"] = "psycopg[binary]"
     faltan = []
     for modulo, paquete in paquetes.items():
         try:
@@ -49,6 +54,7 @@ def instalar_dependencias():
 
 instalar_dependencias()
 
+import hashlib
 import io
 import json
 import math
@@ -66,7 +72,7 @@ from functools import wraps
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, g, jsonify, request, send_from_directory, session
+from flask import Flask, Response, g, jsonify, request, send_from_directory, session
 from google import genai
 from google.genai import types
 from gtts import gTTS
@@ -77,16 +83,24 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # ───────────────────────── Configuración ─────────────────────────
 RAIZ = Path(__file__).resolve().parent
-load_dotenv(RAIZ / ".env", override=True)
+EN_VERCEL = bool(os.getenv("VERCEL"))
+load_dotenv(RAIZ / ".env", override=not EN_VERCEL)
+
+DATABASE_URL = (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "").strip()
+USA_POSTGRES = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+if USA_POSTGRES:
+    import psycopg
+    from psycopg.rows import dict_row
 
 WEB = RAIZ / "web"
-DATOS = RAIZ / "datos"
-MEDIA = DATOS / "media"
-DB = DATOS / "fisica_ia.db"
 CONOCIMIENTO = RAIZ / "conocimiento"          # ← aquí van los PDF/PPTX que usará el chatbot
-INDICE_FILE = DATOS / "indice_conocimiento.json"
-MEDIA.mkdir(parents=True, exist_ok=True)
-CONOCIMIENTO.mkdir(exist_ok=True)
+# En Vercel solo se puede escribir en /tmp (y se borra); por eso allí se usa Postgres.
+DATOS = Path("/tmp/fisica_ia") if EN_VERCEL else RAIZ / "datos"
+DB = DATOS / "fisica_ia.db"
+DATOS.mkdir(parents=True, exist_ok=True)
+if not EN_VERCEL:
+    CONOCIMIENTO.mkdir(exist_ok=True)
+MAX_SUBIDA_MB = 4.4 if EN_VERCEL else 60      # Vercel acepta como máximo 4.5 MB por envío
 
 PUERTO = 5050
 APARTADOS_BASE = ["General", "Mecánica", "Electricidad y magnetismo",
@@ -95,6 +109,9 @@ MODELOS_PREFERIDOS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-late
                       "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
         ".webp": "image/webp", ".gif": "image/gif"}
+MIME_TODOS = {**MIME, ".mp3": "audio/mpeg", ".wav": "audio/wav", ".pdf": "application/pdf",
+              ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+              ".txt": "text/plain; charset=utf-8", ".md": "text/markdown; charset=utf-8"}
 EXT_DOCS = {".pdf", ".pptx", ".txt", ".md"}
 MAX_MENSAJES_CONTEXTO = 30      # cuántos mensajes previos recuerda la IA
 MAX_MENSAJES_CON_IMAGEN = 6     # solo se reenvían imágenes de los últimos N mensajes
@@ -148,12 +165,17 @@ y responde con tu conocimiento general de física.
 """
 
 app = Flask(__name__, static_folder=None)
-app.config.update(MAX_CONTENT_LENGTH=60 * 1024 * 1024,           # 60 MB por envío
+app.config.update(MAX_CONTENT_LENGTH=int(MAX_SUBIDA_MB * 1024 * 1024),
                   SESSION_COOKIE_SAMESITE="Lax",
                   PERMANENT_SESSION_LIFETIME=timedelta(days=30))
 
 
 def clave_secreta():
+    if os.getenv("SECRET_KEY"):
+        return os.getenv("SECRET_KEY")
+    if EN_VERCEL:  # debe ser igual en todas las instancias de Vercel
+        base = (os.getenv("GEMINI_API_KEY") or "") + DATABASE_URL
+        return hashlib.sha256(("fisica-ia|" + base).encode()).hexdigest()
     ruta = DATOS / "secret.key"
     if not ruta.exists():
         ruta.write_text(secrets.token_hex(32), "utf-8")
@@ -163,8 +185,8 @@ def clave_secreta():
 app.secret_key = clave_secreta()
 
 
-# ───────────────────────── Base de datos (SQLite) ─────────────────────────
-ESQUEMA = """
+# ───────────────────────── Base de datos (SQLite local / Postgres en la nube) ─────────────────────────
+ESQUEMA_SQLITE = """
 CREATE TABLE IF NOT EXISTS usuarios(
   id INTEGER PRIMARY KEY, usuario TEXT UNIQUE NOT NULL COLLATE NOCASE,
   nombre TEXT NOT NULL, hash TEXT NOT NULL, creado TEXT NOT NULL);
@@ -182,40 +204,99 @@ CREATE TABLE IF NOT EXISTS mensajes(
 CREATE TABLE IF NOT EXISTS documentos(
   id INTEGER PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL, tipo TEXT NOT NULL, archivo TEXT, texto TEXT, unidades INTEGER, fecha TEXT);
+CREATE TABLE IF NOT EXISTS archivos(
+  id TEXT PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  mime TEXT, datos BLOB, creado TEXT);
+CREATE TABLE IF NOT EXISTS indice(ruta TEXT PRIMARY KEY, hash TEXT, datos TEXT);
 """
 
+ESQUEMA_PG = """
+CREATE TABLE IF NOT EXISTS usuarios(
+  id SERIAL PRIMARY KEY, usuario TEXT UNIQUE NOT NULL,
+  nombre TEXT NOT NULL, hash TEXT NOT NULL, creado TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS apartados(
+  id SERIAL PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL, orden INTEGER DEFAULT 0, UNIQUE(usuario_id, nombre));
+CREATE TABLE IF NOT EXISTS chats(
+  id TEXT PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  apartado_id INTEGER NOT NULL REFERENCES apartados(id) ON DELETE CASCADE, titulo TEXT NOT NULL,
+  creado TEXT NOT NULL, actualizado TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS mensajes(
+  id SERIAL PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  rol TEXT NOT NULL, texto TEXT, imagenes TEXT DEFAULT '[]', audio TEXT,
+  via_voz INTEGER DEFAULT 0, fuentes TEXT DEFAULT '[]', fecha TEXT);
+CREATE TABLE IF NOT EXISTS documentos(
+  id SERIAL PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL, tipo TEXT NOT NULL, archivo TEXT, texto TEXT, unidades INTEGER, fecha TEXT);
+CREATE TABLE IF NOT EXISTS archivos(
+  id TEXT PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  mime TEXT, datos BYTEA, creado TEXT);
+CREATE TABLE IF NOT EXISTS indice(ruta TEXT PRIMARY KEY, hash TEXT, datos TEXT)
+"""
 
-def conectar():
+_pg = None
+_pg_lock = threading.Lock()
+
+
+def _correr(sql, args=(), traer=False, con_id=False):
+    """Ejecuta SQL (escrito con «?») en SQLite o en Postgres."""
+    global _pg
+    if USA_POSTGRES:
+        sql = sql.replace("?", "%s") + (" RETURNING id" if con_id else "")
+        with _pg_lock:
+            for intento in (1, 2):
+                try:
+                    if _pg is None or _pg.closed:
+                        _pg = psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row,
+                                              prepare_threshold=None, connect_timeout=15)
+                    cur = _pg.execute(sql, args)
+                    if con_id:
+                        return cur.fetchone()["id"]
+                    return [dict(f) for f in cur.fetchall()] if traer else None
+                except psycopg.OperationalError:
+                    _pg = None  # conexión cerrada por inactividad: se reconecta una vez
+                    if intento == 2:
+                        raise
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
-    return con
+    try:
+        cur = con.execute(sql, args)
+        filas = [dict(f) for f in cur.fetchall()] if traer else None
+        con.commit()
+        return cur.lastrowid if con_id else filas
+    finally:
+        con.close()
 
 
 def consulta(sql, args=(), uno=False):
-    con = conectar()
-    try:
-        filas = [dict(f) for f in con.execute(sql, args).fetchall()]
-        return (filas[0] if filas else None) if uno else filas
-    finally:
-        con.close()
+    filas = _correr(sql, args, traer=True)
+    return (filas[0] if filas else None) if uno else filas
 
 
-def ejecutar(sql, args=()):
-    con = conectar()
+def ejecutar(sql, args=(), con_id=False):
+    return _correr(sql, args, con_id=con_id)
+
+
+def iniciar_bd():
+    if USA_POSTGRES:
+        for sentencia in filter(str.strip, ESQUEMA_PG.split(";")):
+            try:
+                ejecutar(sentencia)
+            except Exception as e:  # p. ej. dos instancias creando la misma tabla a la vez
+                print("Aviso al crear tablas:", str(e)[:120])
+        return
+    con = sqlite3.connect(DB)
     try:
-        cur = con.execute(sql, args)
+        con.executescript(ESQUEMA_SQLITE)
+        if "fuentes" not in [c[1] for c in con.execute("PRAGMA table_info(mensajes)")]:
+            con.execute("ALTER TABLE mensajes ADD COLUMN fuentes TEXT DEFAULT '[]'")
         con.commit()
-        return cur.lastrowid
     finally:
         con.close()
 
 
-with conectar() as _con:
-    _con.executescript(ESQUEMA)
-    if "fuentes" not in [c[1] for c in _con.execute("PRAGMA table_info(mensajes)")]:
-        _con.execute("ALTER TABLE mensajes ADD COLUMN fuentes TEXT DEFAULT '[]'")
-_con.close()
+iniciar_bd()
 
 
 # ───────────────────────── Utilidades ─────────────────────────
@@ -227,17 +308,56 @@ def error(msg, codigo=400, **extra):
     return jsonify(error=msg, **extra), codigo
 
 
+# Imágenes, audios y documentos se guardan DENTRO de la base de datos (tabla «archivos»),
+# así funcionan igual en tu PC y en Vercel (donde no se pueden guardar archivos).
 def guardar_media(uid, datos: bytes, ext: str) -> str:
-    carpeta = MEDIA / f"u{uid}"
-    carpeta.mkdir(parents=True, exist_ok=True)
-    nombre = f"{uuid.uuid4().hex[:16]}{ext}"
-    (carpeta / nombre).write_bytes(datos)
-    return f"media/u{uid}/{nombre}"
+    aid = uuid.uuid4().hex[:16]
+    ejecutar("INSERT INTO archivos(id, usuario_id, mime, datos, creado) VALUES (?,?,?,?,?)",
+             (aid, uid, MIME_TODOS.get(ext, "application/octet-stream"), datos, ahora()))
+    return f"media/{aid}{ext}"
+
+
+def id_media(rel):
+    m = re.fullmatch(r"media/([0-9a-f]{16})\.\w+", rel or "")
+    return m.group(1) if m else None
+
+
+def leer_media(rel):
+    aid = id_media(rel)
+    if aid:
+        fila = consulta("SELECT datos FROM archivos WHERE id=?", (aid,), uno=True)
+        return bytes(fila["datos"]) if fila else None
+    ruta = DATOS / (rel or "")  # archivos de la versión anterior (carpeta datos/media)
+    return ruta.read_bytes() if rel and ruta.is_file() else None
 
 
 def borrar_media(rel):
-    if rel and (DATOS / rel).is_file():
+    aid = id_media(rel)
+    if aid:
+        ejecutar("DELETE FROM archivos WHERE id=?", (aid,))
+    elif rel and (DATOS / rel).is_file():
         (DATOS / rel).unlink()
+
+
+def enviar_bytes(datos, mime):
+    """Respuesta con soporte de «Range» (necesario para reproducir audio en algunos navegadores)."""
+    total = len(datos)
+    m = re.match(r"bytes=(\d*)-(\d*)", request.headers.get("Range", ""))
+    if m and (m.group(1) or m.group(2)):
+        if m.group(1):
+            ini, fin = int(m.group(1)), int(m.group(2)) if m.group(2) else total - 1
+        else:
+            ini, fin = max(0, total - int(m.group(2))), total - 1
+        fin = min(fin, total - 1)
+        if ini > fin:
+            return Response(status=416, headers={"Content-Range": f"bytes */{total}"})
+        r = Response(datos[ini:fin + 1], 206, mimetype=mime)
+        r.headers["Content-Range"] = f"bytes {ini}-{fin}/{total}"
+    else:
+        r = Response(datos, mimetype=mime)
+    r.headers["Accept-Ranges"] = "bytes"
+    r.headers["Cache-Control"] = "private, max-age=86400"
+    return r
 
 
 def titulo_de(texto):
@@ -281,7 +401,7 @@ def registro():
     if consulta("SELECT id FROM usuarios WHERE usuario=?", (usuario,), uno=True):
         return error("Ese usuario ya existe. Elige otro o inicia sesión.")
     uid = ejecutar("INSERT INTO usuarios(usuario, nombre, hash, creado) VALUES (?,?,?,?)",
-                   (usuario, nombre or usuario, generate_password_hash(clave_), ahora()))
+                   (usuario, nombre or usuario, generate_password_hash(clave_), ahora()), con_id=True)
     for i, a in enumerate(APARTADOS_BASE):
         ejecutar("INSERT INTO apartados(usuario_id, nombre, orden) VALUES (?,?,?)", (uid, a, i))
     iniciar_sesion(uid)
@@ -317,7 +437,7 @@ def id_apartado(uid, nombre):
     a = consulta("SELECT id FROM apartados WHERE usuario_id=? ORDER BY orden, id", (uid,), uno=True)
     if a:
         return a["id"]
-    return ejecutar("INSERT INTO apartados(usuario_id, nombre) VALUES (?, 'General')", (uid,))
+    return ejecutar("INSERT INTO apartados(usuario_id, nombre) VALUES (?, 'General')", (uid,), con_id=True)
 
 
 def crear_chat(uid, apartado, titulo="Nueva conversación"):
@@ -541,12 +661,12 @@ def contexto_documentos(cid):
     restante = MAX_CARACTERES_DOCS
     for d in docs:
         texto = d["texto"] or ""
-        ruta = DATOS / (d["archivo"] or "")
-        if len(texto.strip()) < 40 * max(d["unidades"] or 1, 1) and d["tipo"] == ".pdf" and ruta.is_file() \
-                and ruta.stat().st_size < 15 * 1024 * 1024:
+        escaneado = len(texto.strip()) < 40 * max(d["unidades"] or 1, 1) and d["tipo"] == ".pdf"
+        pdf = leer_media(d["archivo"]) if escaneado else None
+        if pdf and len(pdf) < 15 * 1024 * 1024:
             # PDF escaneado (sin texto): se envía el archivo para que la IA lo lea directamente
             parts.append(types.Part.from_text(text=f"=== DOCUMENTO: {d['nombre']} (PDF escaneado) ==="))
-            parts.append(types.Part.from_bytes(data=ruta.read_bytes(), mime_type="application/pdf"))
+            parts.append(types.Part.from_bytes(data=pdf, mime_type="application/pdf"))
             continue
         if restante <= 0:
             parts.append(types.Part.from_text(text=f"[El documento «{d['nombre']}» no se incluyó por espacio]"))
@@ -573,10 +693,10 @@ def a_contents(mensajes):
         parts = []
         reciente = i >= len(mensajes) - MAX_MENSAJES_CON_IMAGEN
         for rel in m.get("imagenes", []):
-            ruta = DATOS / rel
-            if reciente and ruta.is_file():
+            datos = leer_media(rel) if reciente else None
+            if datos:
                 parts.append(types.Part.from_bytes(
-                    data=ruta.read_bytes(), mime_type=MIME.get(ruta.suffix.lower(), "image/jpeg")))
+                    data=datos, mime_type=MIME.get(Path(rel).suffix.lower(), "image/jpeg")))
             elif not reciente:
                 parts.append(types.Part.from_text(text="[El estudiante envió una imagen antes]"))
         if m.get("texto"):
@@ -745,6 +865,8 @@ class BaseConocimiento:
         self.frags, self.df, self.avgdl = [], Counter(), 1.0
 
     def rutas(self):
+        if not CONOCIMIENTO.is_dir():
+            return []
         return sorted(p for p in CONOCIMIENTO.rglob("*")
                       if p.is_file() and p.suffix.lower() in self.EXTENSIONES
                       and not p.name.startswith(("_", "~$", ".")))
@@ -756,17 +878,26 @@ class BaseConocimiento:
                           for p in rutas)
             if firma == self.firma and not forzar:
                 return
-            cache = leer_json_seguro(INDICE_FILE)
+            # El índice se guarda en la base de datos: así no se vuelve a leer cada archivo
+            # (ni a gastar IA en PDF escaneados) en cada arranque de Vercel.
+            cache = {f["ruta"]: f for f in consulta("SELECT ruta, hash, datos FROM indice")}
             nuevos = {}
             for p in rutas:
-                rel = str(p.relative_to(CONOCIMIENTO))
-                f = f"{p.stat().st_size}-{int(p.stat().st_mtime)}"
-                previo = cache.get(rel)
-                if previo and previo.get("firma") == f and (previo.get("fragmentos") or not forzar):
-                    nuevos[rel] = previo
-                else:
-                    nuevos[rel] = indexar_archivo(p, f)
-            INDICE_FILE.write_text(json.dumps(nuevos, ensure_ascii=False), "utf-8")
+                rel = p.relative_to(CONOCIMIENTO).as_posix()
+                h = hashlib.sha1(p.read_bytes()).hexdigest()
+                previo, info = cache.get(rel), None
+                if previo and previo["hash"] == h:
+                    info = json.loads(previo["datos"])
+                    if forzar and not info.get("fragmentos"):
+                        info = None  # reintentar los que fallaron
+                if info is None:
+                    info = indexar_archivo(p, h)
+                    ejecutar("""INSERT INTO indice(ruta, hash, datos) VALUES (?,?,?)
+                                ON CONFLICT(ruta) DO UPDATE SET hash=excluded.hash, datos=excluded.datos""",
+                             (rel, h, json.dumps(info, ensure_ascii=False)))
+                nuevos[rel] = info
+            for rel in set(cache) - set(nuevos):
+                ejecutar("DELETE FROM indice WHERE ruta=?", (rel,))
             self.archivos, self.firma = nuevos, firma
             self.construir()
 
@@ -809,13 +940,6 @@ class BaseConocimiento:
                 for rel, i in self.archivos.items()]
 
 
-def leer_json_seguro(ruta):
-    try:
-        return json.loads(Path(ruta).read_text("utf-8"))
-    except Exception:
-        return {}
-
-
 BASE = BaseConocimiento()
 
 
@@ -856,12 +980,29 @@ def inicio():
     return send_from_directory(WEB, "index.html")
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status=204)
+
+
+@app.errorhandler(413)
+def demasiado_grande(_e):
+    return error(f"El archivo es muy grande (máximo {MAX_SUBIDA_MB:g} MB por envío). Para materiales "
+                 "grandes del curso, ponlos en la carpeta «conocimiento».", 413)
+
+
 @app.get("/media/<path:ruta>")
 @login_requerido
 def media(ruta):
-    if not ruta.startswith(f"u{g.uid}/"):
+    aid = id_media("media/" + ruta)
+    if aid:
+        fila = consulta("SELECT mime, datos FROM archivos WHERE id=? AND usuario_id=?", (aid, g.uid), uno=True)
+        if not fila:
+            return error("No encontrado.", 404)
+        return enviar_bytes(bytes(fila["datos"]), fila["mime"])
+    if not ruta.startswith(f"u{g.uid}/"):  # archivos de la versión anterior
         return error("No autorizado.", 403)
-    return send_from_directory(MEDIA, ruta)
+    return send_from_directory(DATOS / "media", ruta)
 
 
 @app.get("/api/estado")
@@ -869,7 +1010,9 @@ def estado():
     uid = session.get("uid")
     return jsonify(clave=bool(clave()), modelos=modelos_disponibles(),
                    usuario=info_usuario(uid) if uid else None,
-                   base=sum(1 for a in BASE.resumen() if a["fragmentos"]))
+                   base=sum(1 for a in BASE.resumen() if a["fragmentos"]),
+                   modo="postgres" if USA_POSTGRES else ("temporal" if EN_VERCEL else "local"),
+                   limite_mb=MAX_SUBIDA_MB)
 
 
 @app.get("/api/apartados")

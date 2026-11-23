@@ -160,6 +160,8 @@ footer{padding:10px 18px 16px;background:var(--bg)}
 .arch b{display:block;word-break:break-word}
 .arch small{color:var(--mut)}
 .arch .mal{color:var(--rojo)}
+#bannerTemporal{background:#fff4e5;color:#8a4b00;padding:8px 16px;font-size:13px;text-align:center;border-bottom:1px solid #f5d9a8}
+#bannerTemporal:not([hidden]) ~ #app{height:calc(100dvh - 36px)}
 #toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1b2236;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:60;max-width:90vw;box-shadow:var(--sombra)}
 #visor{position:fixed;inset:0;background:rgba(0,0,0,.85);display:grid;place-items:center;z-index:70;cursor:zoom-out}
 #visor img{max-width:94vw;max-height:94vh;border-radius:8px}
@@ -180,6 +182,8 @@ footer{padding:10px 18px 16px;background:var(--bg)}
 </style>
 </head>
 <body>
+<div id="bannerTemporal" hidden>⚠️ Modo temporal: Vercel borra los datos cada cierto tiempo, así que las cuentas y
+  conversaciones se pueden perder. Conecta una base de datos <b>Neon</b> en Vercel (Storage) para que se guarden.</div>
 
 <!-- ══════════ Pantalla de cuentas ══════════ -->
 <section id="auth" hidden>
@@ -301,7 +305,7 @@ footer{padding:10px 18px 16px;background:var(--bg)}
 
 <script>
 const $ = s => document.querySelector(s);
-const S = { base: 0, usuario: null, apartados: [], apartado: null, chat: null, chats: [], imgs: [], enviando: false, modoReg: false };
+const S = { limiteMB: 60, base: 0, usuario: null, apartados: [], apartado: null, chat: null, chats: [], imgs: [], enviando: false, modoReg: false };
 const store = {
   k(k) { return (S.usuario ? S.usuario.usuario + ':' : '') + k; },
   get(k, d) { try { const v = localStorage.getItem(this.k(k)); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -315,6 +319,7 @@ async function api(url, opts = {}) {
   let data = {};
   try { data = await r.json(); } catch {}
   if (r.status === 401 && data.login) { mostrarAuth(); }
+  if (r.status === 413 && !data.error) data.error = `El archivo es muy grande (máximo ${S.limiteMB} MB por envío).`;
   if (!r.ok) throw Object.assign(new Error(data.error || `Error ${r.status}`), { data });
   return data;
 }
@@ -555,6 +560,11 @@ function bloquear(on) { ['#btnEnviar', '#btnMic', '#btnImg', '#btnDoc'].forEach(
 // ══════════ Documentos PDF / PowerPoint ══════════
 async function subirDocs(files) {
   files = [...files]; if (!files.length || S.enviando) return;
+  const grandes = files.filter(f => f.size > S.limiteMB * 1024 * 1024);
+  if (grandes.length) {
+    toast(`«${grandes[0].name}» pesa más de ${S.limiteMB} MB. Comprímelo o ponlo en la carpeta «conocimiento» del proyecto.`, 8000);
+    files = files.filter(f => !grandes.includes(f)); if (!files.length) return;
+  }
   const fd = new FormData();
   fd.append('chat_id', S.chat ? S.chat.id : '');
   fd.append('apartado', S.apartado);
@@ -611,7 +621,11 @@ async function iniciarGrabacion() {
   G.src.connect(G.proc); G.proc.connect(G.ctx.destination);
   G.on = true; G.t0 = Date.now();
   $('#btnMic').classList.add('grabando'); $('#estadoGrab').hidden = false;
-  G.timer = setInterval(() => { const s = Math.floor((Date.now() - G.t0) / 1000); $('#tiempo').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
+  G.timer = setInterval(() => {
+    const s = Math.floor((Date.now() - G.t0) / 1000);
+    $('#tiempo').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s >= 90) { const wav = detenerGrabacion(); if (wav) enviar(wav); toast('🎤 Máximo 90 segundos por audio: lo envié.'); }
+  }, 250);
 }
 function detenerGrabacion() {
   G.on = false; clearInterval(G.timer);
@@ -766,6 +780,8 @@ async function init() {
   try { e = await api('/api/estado'); }
   catch { document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">No se pudo conectar con el servidor. ¿Está corriendo <b>python app.py</b>?</p>'; return; }
   llenarModelos(e.modelos);
+  S.limiteMB = e.limite_mb || 60;
+  $('#bannerTemporal').hidden = e.modo !== 'temporal';
   $('#aviso').hidden = e.clave;
   if (e.usuario) await entrar(e.usuario); else mostrarAuth();
 }
